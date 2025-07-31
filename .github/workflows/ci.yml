@@ -73,7 +73,7 @@ jobs:
           source: "target/${{ env.JAR_FILE }}"
           target: "${{ env.APP_DIR }}/"
           strip_components: 0
-          rm: true
+          rm: false
           overwrite: true
 
       - name: Verify file transfer
