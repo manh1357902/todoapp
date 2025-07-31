@@ -37,6 +37,19 @@ jobs:
             exit 1
           fi
 
+      - name: Prepare remote directory
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sudo mkdir -p /opt/todoapp
+            sudo chown ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} /opt/todoapp
+            sudo chmod 755 /opt/todoapp
+            ls -ld /opt/todoapp
+
       - name: Copy JAR to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -46,8 +59,20 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "target/todoapp-0.0.1-SNAPSHOT.jar"
           target: "/opt/todoapp/"
+          overwrite: true
           rm: false
-          strip_components: 1
+          strip_components: 0
+
+      - name: Verify file transfer
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            ls -l /opt/todoapp/
+            stat /opt/todoapp/todoapp-0.0.1-SNAPSHOT.jar
 
       - name: Deploy and restart service
         uses: appleboy/ssh-action@v1
@@ -59,16 +84,14 @@ jobs:
           script: |
             #!/bin/bash
             set -e
-            sudo mkdir -p /opt/todoapp
-            sudo chown ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} /opt/todoapp
-            LATEST_JAR=$(ls -t /opt/todoapp/todoapp-0.0.1-SNAPSHOT.jar | head -n 1)
+            echo "Current JAR: $(ls -t /opt/todoapp/todoapp-*.jar | head -n 1)"
             echo "[Unit]
             Description=TodoApp Service
             After=network.target
             [Service]
             User=${{ secrets.SSH_USERNAME }}
             WorkingDirectory=/opt/todoapp
-            ExecStart=/usr/bin/java -jar $LATEST_JAR
+            ExecStart=/usr/bin/java -jar /opt/todoapp/todoapp-0.0.1-SNAPSHOT.jar
             SuccessExitStatus=143
             Restart=always
             RestartSec=30
@@ -76,18 +99,9 @@ jobs:
             WantedBy=multi-user.target" | sudo tee /etc/systemd/system/todoapp.service
             sudo systemctl daemon-reload
             sudo systemctl enable todoapp.service
-            if ! sudo systemctl restart todoapp.service; then
-              echo "::error::Failed to restart service"
-              journalctl -u todoapp.service -b --no-pager -n 50
-              exit 1
-            fi
+            sudo systemctl restart todoapp.service
             sleep 5
-            SERVICE_STATUS=$(systemctl is-active todoapp.service)
-            if [ "$SERVICE_STATUS" != "active" ]; then
-              echo "::error::Service failed to start"
-              journalctl -u todoapp.service -b --no-pager -n 50
-              exit 1
-            fi
+            systemctl status todoapp.service --no-pager
 
       - name: Verify deployment
         run: |
