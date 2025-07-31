@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/pom.xml">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/pom.xml" />
+              <option name="updatedContent" value="&lt;project xmlns=&quot;http://maven.apache.org/POM/4.0.0&quot;&#10;         xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;&#10;         xsi:schemaLocation=&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;&gt;&#10;    &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;&#10;    &lt;groupId&gt;com.example&lt;/groupId&gt;&#10;    &lt;artifactId&gt;todoapp&lt;/artifactId&gt;&#10;    &lt;version&gt;0.0.1-SNAPSHOT&lt;/version&gt;&#10;    &lt;packaging&gt;jar&lt;/packaging&gt;&#10;    &lt;name&gt;todoapp&lt;/name&gt;&#10;    &lt;description&gt;Spring Boot Todo App&lt;/description&gt;&#10;    &lt;parent&gt;&#10;        &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&#10;        &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;&#10;        &lt;version&gt;3.2.5&lt;/version&gt;&#10;        &lt;relativePath/&gt; &lt;!-- lookup parent from repository --&gt;&#10;    &lt;/parent&gt;&#10;    &lt;properties&gt;&#10;        &lt;java.version&gt;17&lt;/java.version&gt;&#10;    &lt;/properties&gt;&#10;    &lt;dependencies&gt;&#10;        &lt;dependency&gt;&#10;            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&#10;            &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;&#10;        &lt;/dependency&gt;&#10;        &lt;dependency&gt;&#10;            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&#10;            &lt;artifactId&gt;spring-boot-starter-data-jpa&lt;/artifactId&gt;&#10;        &lt;/dependency&gt;&#10;        &lt;dependency&gt;&#10;            &lt;groupId&gt;com.h2database&lt;/groupId&gt;&#10;            &lt;artifactId&gt;h2&lt;/artifactId&gt;&#10;            &lt;scope&gt;runtime&lt;/scope&gt;&#10;        &lt;/dependency&gt;&#10;    &lt;/dependencies&gt;&#10;    &lt;build&gt;&#10;        &lt;plugins&gt;&#10;            &lt;plugin&gt;&#10;                &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&#10;                &lt;artifactId&gt;spring-boot-maven-plugin&lt;/artifactId&gt;&#10;            &lt;/plugin&gt;&#10;        &lt;/plugins&gt;&#10;    &lt;/build&gt;&#10;&lt;/project&gt;&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/src/main/java/com/example/todoapp/TodoappApplication.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/com/example/todoapp/TodoappApplication.java" />
+              <option name="updatedContent" value="package com.example.todoapp;&#10;&#10;import org.springframework.boot.SpringApplication;&#10;import org.springframework.boot.autoconfigure.SpringBootApplication;&#10;&#10;@SpringBootApplication&#10;public class TodoappApplication {&#10;    public static void main(String[] args) {&#10;        SpringApplication.run(TodoappApplication.class, args);&#10;    }&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/src/main/java/com/example/todoapp/controller/TodoController.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/com/example/todoapp/controller/TodoController.java" />
+              <option name="updatedContent" value="package com.example.todoapp.controller;&#10;&#10;import com.example.todoapp.model.Todo;&#10;import com.example.todoapp.service.TodoService;&#10;import org.springframework.beans.factory.annotation.Autowired;&#10;import org.springframework.http.ResponseEntity;&#10;import org.springframework.web.bind.annotation.*;&#10;&#10;import java.util.List;&#10;&#10;@RestController&#10;@RequestMapping(&quot;/api/todos&quot;)&#10;public class TodoController {&#10;    @Autowired&#10;    private TodoService todoService;&#10;&#10;    @GetMapping&#10;    public List&lt;Todo&gt; getAllTodos() {&#10;        return todoService.getAllTodos();&#10;    }&#10;&#10;    @GetMapping(&quot;/{id}&quot;)&#10;    public ResponseEntity&lt;Todo&gt; getTodoById(@PathVariable Long id) {&#10;        return todoService.getTodoById(id)&#10;                .map(ResponseEntity::ok)&#10;                .orElse(ResponseEntity.notFound().build());&#10;    }&#10;&#10;    @PostMapping&#10;    public Todo createTodo(@RequestBody Todo todo) {&#10;        return todoService.createTodo(todo);&#10;    }&#10;&#10;    @PutMapping(&quot;/{id}&quot;)&#10;    public ResponseEntity&lt;Todo&gt; updateTodo(@PathVariable Long id, @RequestBody Todo todo) {&#10;        return ResponseEntity.ok(todoService.updateTodo(id, todo));&#10;    }&#10;&#10;    @DeleteMapping(&quot;/{id}&quot;)&#10;    public ResponseEntity&lt;Void&gt; deleteTodo(@PathVariable Long id) {&#10;        todoService.deleteTodo(id);&#10;        return ResponseEntity.noContent().build();&#10;    }&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/src/main/java/com/example/todoapp/model/Todo.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/com/example/todoapp/model/Todo.java" />
+              <option name="updatedContent" value="package com.example.todoapp.model;&#10;&#10;import jakarta.persistence.Entity;&#10;import jakarta.persistence.GeneratedValue;&#10;import jakarta.persistence.GenerationType;&#10;import jakarta.persistence.Id;&#10;&#10;@Entity&#10;public class Todo {&#10;    @Id&#10;    @GeneratedValue(strategy = GenerationType.IDENTITY)&#10;    private Long id;&#10;    private String title;&#10;    private boolean completed;&#10;&#10;    public Todo() {}&#10;&#10;    public Todo(String title, boolean completed) {&#10;        this.title = title;&#10;        this.completed = completed;&#10;    }&#10;&#10;    public Long getId() {&#10;        return id;&#10;    }&#10;&#10;    public void setId(Long id) {&#10;        this.id = id;&#10;    }&#10;&#10;    public String getTitle() {&#10;        return title;&#10;    }&#10;&#10;    public void setTitle(String title) {&#10;        this.title = title;&#10;    }&#10;&#10;    public boolean isCompleted() {&#10;        return completed;&#10;    }&#10;&#10;    public void setCompleted(boolean completed) {&#10;        this.completed = completed;&#10;    }&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/src/main/java/com/example/todoapp/repository/TodoRepository.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/com/example/todoapp/repository/TodoRepository.java" />
+              <option name="updatedContent" value="package com.example.todoapp.repository;&#10;&#10;import com.example.todoapp.model.Todo;&#10;import org.springframework.data.jpa.repository.JpaRepository;&#10;&#10;public interface TodoRepository extends JpaRepository&lt;Todo, Long&gt; {&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/src/main/java/com/example/todoapp/service/TodoService.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/com/example/todoapp/service/TodoService.java" />
+              <option name="updatedContent" value="package com.example.todoapp.service;&#10;&#10;import com.example.todoapp.model.Todo;&#10;import com.example.todoapp.repository.TodoRepository;&#10;import org.springframework.beans.factory.annotation.Autowired;&#10;import org.springframework.stereotype.Service;&#10;&#10;import java.util.List;&#10;import java.util.Optional;&#10;&#10;@Service&#10;public class TodoService {&#10;    @Autowired&#10;    private TodoRepository todoRepository;&#10;&#10;    public List&lt;Todo&gt; getAllTodos() {&#10;        return todoRepository.findAll();&#10;    }&#10;&#10;    public Optional&lt;Todo&gt; getTodoById(Long id) {&#10;        return todoRepository.findById(id);&#10;    }&#10;&#10;    public Todo createTodo(Todo todo) {&#10;        return todoRepository.save(todo);&#10;    }&#10;&#10;    public void deleteTodo(Long id) {&#10;        todoRepository.deleteById(id);&#10;    }&#10;&#10;    public Todo updateTodo(Long id, Todo todoDetails) {&#10;        return todoRepository.findById(id).map(todo -&gt; {&#10;            todo.setTitle(todoDetails.getTitle());&#10;            todo.setCompleted(todoDetails.isCompleted());&#10;            return todoRepository.save(todo);&#10;        }).orElseGet(() -&gt; {&#10;            todoDetails.setId(id);&#10;            return todoRepository.save(todoDetails);&#10;        });&#10;    }&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
