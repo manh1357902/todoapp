@@ -34,9 +34,16 @@ jobs:
       - name: Verify JAR exists
         run: |
           if [ ! -f target/${{ env.JAR_FILE }} ]; then
-            echo "::error::JAR file not found!"
+            echo "::error::JAR file not found in target directory!"
+            ls -la target/
             exit 1
           fi
+
+      - name: Debug JAR location
+        run: |
+          echo "Workspace: $(pwd)"
+          echo "JAR path: target/${{ env.JAR_FILE }}"
+          stat target/${{ env.JAR_FILE }}
 
       - name: Prepare remote directory
         uses: appleboy/ssh-action@v1
@@ -46,10 +53,15 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            echo "Creating application directory..."
             sudo mkdir -p ${{ env.APP_DIR }}
             sudo chown ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} ${{ env.APP_DIR }}
             sudo chmod 755 ${{ env.APP_DIR }}
+            echo "Directory created:"
             ls -ld ${{ env.APP_DIR }}
+            echo "Testing write permissions..."
+            touch ${{ env.APP_DIR }}/testfile && rm ${{ env.APP_DIR }}/testfile
+            echo "Write test successful"
 
       - name: Copy JAR to server
         uses: appleboy/scp-action@v1
@@ -61,6 +73,8 @@ jobs:
           source: "target/${{ env.JAR_FILE }}"
           target: "${{ env.APP_DIR }}/"
           strip_components: 0
+          rm: true
+          overwrite: true
 
       - name: Verify file transfer
         uses: appleboy/ssh-action@v1
@@ -70,8 +84,16 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            ls -l ${{ env.APP_DIR }}
-            stat ${{ env.APP_DIR }}/${{ env.JAR_FILE }}
+            echo "Contents of ${{ env.APP_DIR }}:"
+            ls -la ${{ env.APP_DIR }}
+            if [ -f "${{ env.APP_DIR }}/${{ env.JAR_FILE }}" ]; then
+              echo "JAR verification:"
+              stat ${{ env.APP_DIR }}/${{ env.JAR_FILE }}
+              echo "File size: $(du -h ${{ env.APP_DIR }}/${{ env.JAR_FILE }} | cut -f1)"
+            else
+              echo "::error::JAR file not found on server!"
+              exit 1
+            fi
 
       - name: Deploy and restart service
         uses: appleboy/ssh-action@v1
@@ -83,10 +105,14 @@ jobs:
           script: |
             #!/bin/bash
             set -e
-            echo "Current JAR: $(ls -t ${{ env.APP_DIR }}/todoapp-*.jar | head -n 1)"
+            echo "=== Deployment Started ==="
             
-            # Create systemd service file
-            echo "[Unit]
+            echo "Current JAR version:"
+            ls -lt ${{ env.APP_DIR }}/todoapp-*.jar | head -n 1
+            
+            echo "Creating systemd service..."
+            sudo tee /etc/systemd/system/${{ env.SERVICE_NAME }} > /dev/null <<EOF
+            [Unit]
             Description=TodoApp Service
             After=network.target
             
@@ -99,13 +125,14 @@ jobs:
             RestartSec=30
             
             [Install]
-            WantedBy=multi-user.target" | sudo tee /etc/systemd/system/${{ env.SERVICE_NAME }} > /dev/null
+            WantedBy=multi-user.target
+            EOF
             
-            # Reload and enable service
+            echo "Reloading systemd..."
             sudo systemctl daemon-reload
             sudo systemctl enable ${{ env.SERVICE_NAME }}
             
-            # Check if service is already running
+            echo "Checking service status..."
             if systemctl is-active --quiet ${{ env.SERVICE_NAME }}; then
               echo "Restarting existing service..."
               sudo systemctl restart ${{ env.SERVICE_NAME }}
@@ -115,9 +142,13 @@ jobs:
             fi
             
             sleep 5
+            echo "Final service status:"
             sudo systemctl status ${{ env.SERVICE_NAME }} --no-pager
 
       - name: Verify deployment
         run: |
-          echo "Deployment successful!"
-          echo "Application should be available at: http://${{ secrets.SSH_HOST }}:8080"
+          echo "=== Deployment Successful ==="
+          echo "Application deployed to: ${{ secrets.SSH_HOST }}"
+          echo "Access the application at: http://${{ secrets.SSH_HOST }}:8080"
+          echo "Service name: ${{ env.SERVICE_NAME }}"
+          echo "JAR location: ${{ env.APP_DIR }}/${{ env.JAR_FILE }}"
