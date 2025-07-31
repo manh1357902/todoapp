@@ -69,7 +69,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "target/todoapp.jar"
           target: "${{ env.APP_DIR }}/"
-          strip_components: 0
+          strip_components: 1
           overwrite: true
           timeout: 60s
 
