@@ -1,33 +1,95 @@
-name: Java CI with Maven
+name: Java CI/CD with Maven
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+
+env:
+  APP_NAME: "todoapp"
+  APP_DIR: "/opt/todoapp"
+  SERVICE_NAME: "todoapp.service"
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
 
-    - name: Build with Maven
-      run: mvn -B package --file pom.xml
+      - name: Build with Maven
+        run: mvn -B clean package --file pom.xml
 
-    - name: Run tests
-      run: mvn test
+      - name: Run tests
+        run: mvn test
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: todoapp-jar
-        path: target/todoapp-0.0.1-SNAPSHOT.jar
+      - name: Verify JAR exists
+        run: |
+          if [ ! -f target/todoapp-0.0.1-SNAPSHOT.jar ]; then
+            echo "::error::JAR file not found!"
+            exit 1
+          fi
+
+      - name: Copy JAR to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "target/todoapp-0.0.1-SNAPSHOT.jar"
+          target: "/opt/todoapp/"
+          rm: true
+          strip_components: 1
+
+      - name: Deploy and restart service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            #!/bin/bash
+            set -e
+            sudo mkdir -p /opt/todoapp
+            sudo chown ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} /opt/todoapp
+            LATEST_JAR=$(ls -t /opt/todoapp/todoapp-0.0.1-SNAPSHOT.jar | head -n 1)
+            echo "[Unit]
+            Description=TodoApp Service
+            After=network.target
+            [Service]
+            User=${{ secrets.SSH_USERNAME }}
+            WorkingDirectory=/opt/todoapp
+            ExecStart=/usr/bin/java -jar $LATEST_JAR
+            SuccessExitStatus=143
+            Restart=always
+            RestartSec=30
+            [Install]
+            WantedBy=multi-user.target" | sudo tee /etc/systemd/system/todoapp.service
+            sudo systemctl daemon-reload
+            sudo systemctl enable todoapp.service
+            if ! sudo systemctl restart todoapp.service; then
+              echo "::error::Failed to restart service"
+              journalctl -u todoapp.service -b --no-pager -n 50
+              exit 1
+            fi
+            sleep 5
+            SERVICE_STATUS=$(systemctl is-active todoapp.service)
+            if [ "$SERVICE_STATUS" != "active" ]; then
+              echo "::error::Service failed to start"
+              journalctl -u todoapp.service -b --no-pager -n 50
+              exit 1
+            fi
+
+      - name: Verify deployment
+        run: |
+          echo "Deployment successful!"
+          echo "Application should be available at: http://${{ secrets.SSH_HOST }}:8080"
