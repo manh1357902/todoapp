@@ -46,7 +46,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "target/todoapp-0.0.1-SNAPSHOT.jar"
           target: "/opt/todoapp/"
-          rm: true
+          rm: false
           strip_components: 1
 
       - name: Deploy and restart service
