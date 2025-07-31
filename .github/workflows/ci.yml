@@ -8,6 +8,7 @@ env:
   APP_NAME: "todoapp"
   APP_DIR: "/opt/todoapp"
   SERVICE_NAME: "todoapp.service"
+  JAR_FILE: "todoapp-0.0.1-SNAPSHOT.jar"
 
 jobs:
   build-and-deploy:
@@ -32,7 +33,7 @@ jobs:
 
       - name: Verify JAR exists
         run: |
-          if [ ! -f target/todoapp-0.0.1-SNAPSHOT.jar ]; then
+          if [ ! -f target/${{ env.JAR_FILE }} ]; then
             echo "::error::JAR file not found!"
             exit 1
           fi
@@ -45,22 +46,20 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo mkdir -p /opt/todoapp
-            sudo chown ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} /opt/todoapp
-            sudo chmod 755 /opt/todoapp
-            ls -ld /opt/todoapp
+            sudo mkdir -p ${{ env.APP_DIR }}
+            sudo chown ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} ${{ env.APP_DIR }}
+            sudo chmod 755 ${{ env.APP_DIR }}
+            ls -ld ${{ env.APP_DIR }}
 
       - name: Copy JAR to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           port: ${{ secrets.SSH_PORT || '22' }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "target/todoapp-0.0.1-SNAPSHOT.jar"
-          target: "/opt/todoapp/"
-          overwrite: true
-          rm: false
+          source: "target/${{ env.JAR_FILE }}"
+          target: "${{ env.APP_DIR }}/"
           strip_components: 0
 
       - name: Verify file transfer
@@ -71,8 +70,8 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            ls -l /opt/todoapp/
-            stat /opt/todoapp/todoapp-0.0.1-SNAPSHOT.jar
+            ls -l ${{ env.APP_DIR }}
+            stat ${{ env.APP_DIR }}/${{ env.JAR_FILE }}
 
       - name: Deploy and restart service
         uses: appleboy/ssh-action@v1
@@ -84,24 +83,39 @@ jobs:
           script: |
             #!/bin/bash
             set -e
-            echo "Current JAR: $(ls -t /opt/todoapp/todoapp-*.jar | head -n 1)"
+            echo "Current JAR: $(ls -t ${{ env.APP_DIR }}/todoapp-*.jar | head -n 1)"
+            
+            # Create systemd service file
             echo "[Unit]
             Description=TodoApp Service
             After=network.target
+            
             [Service]
             User=${{ secrets.SSH_USERNAME }}
-            WorkingDirectory=/opt/todoapp
-            ExecStart=/usr/bin/java -jar /opt/todoapp/todoapp-0.0.1-SNAPSHOT.jar
+            WorkingDirectory=${{ env.APP_DIR }}
+            ExecStart=/usr/bin/java -jar ${{ env.APP_DIR }}/${{ env.JAR_FILE }}
             SuccessExitStatus=143
             Restart=always
             RestartSec=30
+            
             [Install]
-            WantedBy=multi-user.target" | sudo tee /etc/systemd/system/todoapp.service
+            WantedBy=multi-user.target" | sudo tee /etc/systemd/system/${{ env.SERVICE_NAME }} > /dev/null
+            
+            # Reload and enable service
             sudo systemctl daemon-reload
-            sudo systemctl enable todoapp.service
-            sudo systemctl restart todoapp.service
+            sudo systemctl enable ${{ env.SERVICE_NAME }}
+            
+            # Check if service is already running
+            if systemctl is-active --quiet ${{ env.SERVICE_NAME }}; then
+              echo "Restarting existing service..."
+              sudo systemctl restart ${{ env.SERVICE_NAME }}
+            else
+              echo "Starting new service..."
+              sudo systemctl start ${{ env.SERVICE_NAME }}
+            fi
+            
             sleep 5
-            systemctl status todoapp.service --no-pager
+            sudo systemctl status ${{ env.SERVICE_NAME }} --no-pager
 
       - name: Verify deployment
         run: |
