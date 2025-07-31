@@ -31,21 +31,20 @@ jobs:
       - name: Run tests
         run: mvn test
 
-      - name: Verify JAR exists
+      - name: Verify and prepare JAR
         run: |
-          if [ ! -f target/${{ env.JAR_FILE }} ]; then
-            echo "::error::JAR file not found in target directory!"
+          # Verify JAR exists
+          if [ ! -f "target/${{ env.JAR_FILE }}" ]; then
+            echo "::error::JAR file not found!"
             ls -la target/
             exit 1
           fi
+          
+          # Rename JAR to standardized name
+          mv "target/${{ env.JAR_FILE }}" "target/todoapp.jar"
+          echo "JAR prepared: $(ls -la target/todoapp.jar)"
 
-      - name: Debug JAR location
-        run: |
-          echo "Workspace: $(pwd)"
-          echo "JAR path: target/${{ env.JAR_FILE }}"
-          stat target/${{ env.JAR_FILE }}
-
-      - name: Prepare remote directory
+      - name: Setup remote environment
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -53,30 +52,28 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "Creating application directory..."
+            # Clean setup
+            sudo rm -rf ${{ env.APP_DIR }}
             sudo mkdir -p ${{ env.APP_DIR }}
-            sudo chown ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} ${{ env.APP_DIR }}
-            sudo chmod 755 ${{ env.APP_DIR }}
-            echo "Directory created:"
+            sudo chown -R ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} ${{ env.APP_DIR }}
+            sudo chmod -R 755 ${{ env.APP_DIR }}
+            echo "Directory prepared:"
             ls -ld ${{ env.APP_DIR }}
-            echo "Testing write permissions..."
-            touch ${{ env.APP_DIR }}/testfile && rm ${{ env.APP_DIR }}/testfile
-            echo "Write test successful"
 
-      - name: Copy JAR to server
+      - name: Transfer JAR file
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           port: ${{ secrets.SSH_PORT || '22' }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "target/${{ env.JAR_FILE }}"
+          source: "target/todoapp.jar"
           target: "${{ env.APP_DIR }}/"
           strip_components: 0
-          rm: false
           overwrite: true
+          timeout: 60s
 
-      - name: Verify file transfer
+      - name: Verify deployment files
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -84,18 +81,18 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "Contents of ${{ env.APP_DIR }}:"
+            echo "Deployment contents:"
             ls -la ${{ env.APP_DIR }}
-            if [ -f "${{ env.APP_DIR }}/${{ env.JAR_FILE }}" ]; then
-              echo "JAR verification:"
-              stat ${{ env.APP_DIR }}/${{ env.JAR_FILE }}
-              echo "File size: $(du -h ${{ env.APP_DIR }}/${{ env.JAR_FILE }} | cut -f1)"
-            else
-              echo "::error::JAR file not found on server!"
+            
+            if [ ! -f "${{ env.APP_DIR }}/todoapp.jar" ]; then
+              echo "::error::JAR file not found in target directory!"
               exit 1
             fi
+            
+            echo "JAR verified:"
+            stat "${{ env.APP_DIR }}/todoapp.jar"
 
-      - name: Deploy and restart service
+      - name: Configure and start service
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -103,15 +100,9 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            #!/bin/bash
-            set -e
-            echo "=== Deployment Started ==="
-            
-            echo "Current JAR version:"
-            ls -lt ${{ env.APP_DIR }}/todoapp-*.jar | head -n 1
-            
-            echo "Creating systemd service..."
-            sudo tee /etc/systemd/system/${{ env.SERVICE_NAME }} > /dev/null <<EOF
+            # Setup systemd service
+            echo "Creating service configuration..."
+            sudo bash -c 'cat > /etc/systemd/system/${{ env.SERVICE_NAME }} <<EOF
             [Unit]
             Description=TodoApp Service
             After=network.target
@@ -119,36 +110,31 @@ jobs:
             [Service]
             User=${{ secrets.SSH_USERNAME }}
             WorkingDirectory=${{ env.APP_DIR }}
-            ExecStart=/usr/bin/java -jar ${{ env.APP_DIR }}/${{ env.JAR_FILE }}
+            ExecStart=/usr/bin/java -jar ${{ env.APP_DIR }}/todoapp.jar
             SuccessExitStatus=143
             Restart=always
             RestartSec=30
             
             [Install]
             WantedBy=multi-user.target
-            EOF
+            EOF'
             
-            echo "Reloading systemd..."
+            # Reload and enable service
             sudo systemctl daemon-reload
             sudo systemctl enable ${{ env.SERVICE_NAME }}
             
-            echo "Checking service status..."
-            if systemctl is-active --quiet ${{ env.SERVICE_NAME }}; then
-              echo "Restarting existing service..."
-              sudo systemctl restart ${{ env.SERVICE_NAME }}
-            else
-              echo "Starting new service..."
-              sudo systemctl start ${{ env.SERVICE_NAME }}
-            fi
+            # Restart service
+            echo "Restarting service..."
+            sudo systemctl restart ${{ env.SERVICE_NAME }}
             
-            sleep 5
-            echo "Final service status:"
+            # Verify status
+            sleep 3
+            echo "Service status:"
             sudo systemctl status ${{ env.SERVICE_NAME }} --no-pager
 
-      - name: Verify deployment
+      - name: Final verification
         run: |
           echo "=== Deployment Successful ==="
-          echo "Application deployed to: ${{ secrets.SSH_HOST }}"
-          echo "Access the application at: http://${{ secrets.SSH_HOST }}:8080"
-          echo "Service name: ${{ env.SERVICE_NAME }}"
-          echo "JAR location: ${{ env.APP_DIR }}/${{ env.JAR_FILE }}"
+          echo "Application URL: http://${{ secrets.SSH_HOST }}:8080"
+          echo "Service management:"
+          echo "  ssh ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} 'sudo systemctl status ${{ env.SERVICE_NAME }}'"
